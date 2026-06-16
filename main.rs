@@ -1,5 +1,6 @@
 use std::env;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
@@ -23,13 +24,26 @@ fn main() {
         std::process::exit(1);
     }
 
-    let relative_exec_path = bundle_path.join("AppRun");
+    let config_path = bundle_path.join("AppInfo.toml");
+    if !config_path.exists() {
+        eprintln!("Error: Missing 'AppInfo.toml' metadata file in bundle root.");
+        std::process::exit(1);
+    }
 
-    let executable_path = match std::fs::canonicalize(&relative_exec_path) {
+    let exec_relative_path = match parse_config_exec_path(&config_path) {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("Error reading configuration: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let relative_exec_path = bundle_path.join(exec_relative_path);
+    let executable_path = match fs::canonicalize(&relative_exec_path) {
         Ok(path) => path,
         Err(_) => {
             eprintln!(
-                "Error: Invalid bundle format. Missing internal executable at '{:?}'", 
+                "Error: Configured executable not found at '{:?}'", 
                 relative_exec_path
             );
             std::process::exit(1);
@@ -37,12 +51,24 @@ fn main() {
     };
 
     println!("Launching bundle: {}...", bundle_path_str);
+    let working_dir;
+    let assets_dir = bundle_path.join("Assets");
+    if parse_uses_assets(&config_path){
+        working_dir = if assets_dir.is_dir() {
+            assets_dir
+        } else {
+            bundle_path.to_path_buf()
+        };
+    } else {
+        println!("bundle does not use Assets, keep working directory with the executable");
+        working_dir = bundle_path.to_path_buf();
+    };
 
-    let app_args: Vec<&String> = args.iter().skip(2).collect();
+    let app_args: Vec<&str> = args.iter().skip(2).map(|s| s.as_str()).collect();
 
     let mut child = Command::new(&executable_path)
         .args(&app_args)
-        .current_dir(bundle_path) 
+        .current_dir(working_dir)
         .spawn()
         .expect("Failed to start the bundle application");
 
@@ -57,4 +83,44 @@ fn main() {
             std::process::exit(1);
         }
     }
+}
+
+fn parse_config_exec_path(config_path: &Path) -> Result<PathBuf, String> {
+    let content = fs::read_to_string(config_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("exec_path") {
+            let parts: Vec<&str> = trimmed.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                let path_val = parts[1].trim().trim_matches('"').trim_matches('\'');
+                return Ok(PathBuf::from(path_val));
+            }
+        }
+    }
+
+    Err("Could not find a valid 'exec_path' key in AppInfo.toml".to_string())
+}
+
+fn parse_uses_assets(config_path: &Path) -> bool {
+    let content = fs::read_to_string(config_path).unwrap_or_default();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("uses_assets") {
+            let parts: Vec<&str> = trimmed.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                let path_val = parts[1].trim().trim_matches('"').trim_matches('\'');
+                if path_val == "true" {
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+        }
+    }
+    
+    false
 }
