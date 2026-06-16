@@ -1,0 +1,4 @@
+[Application]
+name = "Example Name"
+exec_path = "Contents/Linux/Executable"
+uses_assets = true
