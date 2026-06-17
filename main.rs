@@ -29,7 +29,7 @@ fn main() {
     }
     
     if args[1] == "create"{
-        create::create(args);
+        let _create = create::create(args);
         std::process::exit(0);
     }
 
