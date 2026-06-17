@@ -7,7 +7,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 struct AppInfo {
     name: String,
-    bin_path: String,
+    exec_path: String,
 }
 
 pub fn create(args: Vec<String>) -> std::io::Result<()> {
@@ -30,7 +30,7 @@ pub fn create(args: Vec<String>) -> std::io::Result<()> {
 
     let app_info = AppInfo {
         name: bundle_name.clone(),
-        bin_path: format!("Contents/Linux/{}", bundle_name), 
+        exec_path: format!("Contents/Linux/{}", bundle_name), 
     };
 
     let toml_string = toml::to_string(&app_info)
