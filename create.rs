@@ -1,0 +1,45 @@
+use std::env;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::PathBuf;
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct AppInfo {
+    name: String,
+    bin_path: String,
+}
+
+pub fn create(args: Vec<String>) -> std::io::Result<()> {
+    if args.len() < 3 {
+        eprintln!("Error: Please provide a bundle name.");
+        eprintln!("Usage: dirx create <bundle_name>");
+        std::process::exit(1);
+    }
+    
+    let bundle_name = &args[2];
+    let root_dir = PathBuf::from(format!("{}.bundle", bundle_name));
+    
+    let assets_dir = root_dir.join("Assets");
+    let linux_dir = root_dir.join("Contents/Linux");
+    let toml_path = root_dir.join("AppInfo.toml");
+
+    fs::create_dir_all(&assets_dir)?;
+    fs::create_dir_all(&linux_dir)?;
+    println!("Created directory structure for {}!", root_dir.display());
+
+    let app_info = AppInfo {
+        name: bundle_name.clone(),
+        bin_path: format!("Contents/Linux/{}", bundle_name), 
+    };
+
+    let toml_string = toml::to_string(&app_info)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    let mut file = File::create(toml_path)?;
+    file.write_all(toml_string.as_bytes())?;
+    
+    println!("AppInfo.toml generated successfully.");
+
+    Ok(())
+}

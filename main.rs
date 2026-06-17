@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
+mod create;
 
 use std::env;
 use std::fs;
@@ -26,8 +27,14 @@ fn main() {
         eprintln!("Usage: bundle-runner <path-to-application.bundle>");
         std::process::exit(1);
     }
+    
+    if args[1] == "create"{
+        create::create(args);
+        std::process::exit(0);
+    }
 
     let bundle_path_str = &args[1];
+    let forwarded_args = &args[2..];
     let bundle_path = Path::new(bundle_path_str);
 
     if !bundle_path.is_dir() {
@@ -79,14 +86,20 @@ fn main() {
         println!("bundle does not use Assets, keep working directory with the executable");
         working_dir = bundle_path.to_path_buf();
     };
-
-    let app_args: Vec<&str> = args.iter().skip(2).map(|s| s.as_str()).collect();
-
-    let mut child = Command::new(&executable_path)
-        .args(&app_args)
-        .current_dir(working_dir)
-        .spawn()
-        .expect("Failed to start the bundle application");
+    
+    let mut command = Command::new(&executable_path);
+    command.args(forwarded_args);
+    command.current_dir(working_dir);
+    
+    println!("Executing Command: {:?}", command);
+    
+    let mut child = command.spawn().expect("Failed to start the bundle application");
+    
+    //let mut child = Command::new(&executable_path)
+    //    .args(forwarded_args)
+    //    .current_dir(working_dir)
+    //    .spawn()
+    //    .expect("Failed to start the bundle application");
 
     match child.wait() {
         Ok(status) => {
@@ -124,19 +137,13 @@ fn parse_uses_assets(config_path: &Path) -> bool {
 
     for line in content.lines() {
         let trimmed = line.trim();
-
         if trimmed.starts_with("uses_assets") {
             let parts: Vec<&str> = trimmed.splitn(2, '=').collect();
             if parts.len() == 2 {
                 let path_val = parts[1].trim().trim_matches('"').trim_matches('\'');
-                if path_val == "true" {
-                    return true;
-                } else {
-                    return false;
-                }
+                return path_val == "true";
             }
         }
     }
-    
     false
 }
